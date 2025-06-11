@@ -1,0 +1,159 @@
+
+## Methodology for Exploiting MrRobot CTF
+
+### 1. **Reconnaissance with Nmap**
+
+* Performed an initial port scan using:
+
+  nmap -sV -sC -oA nmap_output [Target_IP]
+
+* Results revealed:
+
+  * Port 22 (SSH) closed
+  * Port 80 (HTTP) open, running Apache httpd
+  * Port 443 (HTTPS) open, running Apache httpd with a valid SSL certificate
+
+* Added `[Target_IP]` and hostname to `/etc/hosts` for easier domain name resolution.
+
+
+### 2. **Directory Enumeration with Gobuster**
+
+* Used gobuster to enumerate directories on the HTTP server:
+
+  gobuster dir -u http://[hostname] -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -t 100 -q -o gobuster_output.txt
+
+* Found interesting directories and files:
+
+  * `/login` redirecting to `/wp-login.php`
+  * `/key-1-of-3.txt` containing the first key
+  * `/fsocity.dic` (a dictionary file)
+  * `/license` containing encoded or suspicious content
+
+
+### 3. **Information Gathering & Credential Discovery**
+
+* Downloaded and inspected `/key-1-of-3.txt` and `/fsocity.dic`
+* Decoded content in `/license` via CyberChef and found credentials:
+
+  elliot:ER28-0652
+
+
+### 4. **Accessing Web Application**
+
+* Navigated to `/login` and was redirected to WordPress login page `/wp-login.php`
+* Logged in as user `elliot` with discovered credentials
+
+
+### 5. **Code Execution via WordPress File Editor**
+
+* User `elliot` had permissions to edit theme files
+* Edited `404.php` template with a reverse shell payload customized for your IP and port
+* Set up a `netcat` listener on your machine to catch the shell
+
+
+### 6. **Gaining a Shell**
+
+* Triggered the reverse shell by accessing:
+
+
+  http://[Target_IP]/wp-includes/themes/TwentyFifteen/404.php
+
+* Obtained a shell on the server
+
+
+### 7. **Shell Stabilization**
+
+* Used Python PTY module for a better interactive shell:
+
+
+  python -c 'import pty; pty.spawn("/bin/sh")'
+  export SHELL=/bin/bash
+  stty raw -echo
+
+* This improves terminal control and usability
+
+
+
+### 8. **Privilege Escalation - User `robot`**
+
+* Checked user files and found hashed password for user `robot`:
+
+ 
+  robot:c3fcd3d76192e4007dfb496cca67e13b
+
+
+* Cracked the MD5 hash with John the Ripper:
+
+
+  john --format=raw-md5 --wordlist=/usr/share/wordlists/rockyou.txt secret
+
+
+* Obtained password:
+
+  abcdefghijklmnopqrstuvwxyz
+
+
+* Switched user to `robot`:
+
+
+  su robot
+
+
+* Accessed `key-2-of-3.txt` under robot’s home directory
+
+
+
+### 9. **Privilege Escalation - Root via SUID Nmap**
+
+* Enumerated SUID binaries:
+
+
+  find / -perm -4000 2>/dev/null
+
+find / — Search starting from the root directory (/), i.e., the whole filesystem.
+
+-perm -4000 — Look for files with the SUID bit set.
+
+The number 4000 refers to the Set User ID (SUID) permission bit in Linux.
+
+Files with SUID run with the permissions of the file owner (usually root), not the user who runs them.
+
+2>/dev/null — Redirects all error messages (like permission denied) to /dev/null (ignore them) so the output is cleaner.
+
+Why is it used?
+To find programs on the system that run with root privileges due to the SUID bit.
+
+These files can be potential privilege escalation vectors.
+
+If you find a vulnerable SUID program, you might be able to exploit it to get root access.
+
+Why is it needed in exploitation?
+When you have a limited user shell (non-root), you want to see if you can escalate privileges.
+
+SUID programs are your best bet since they can run commands as root.
+
+Identifying these files helps you focus your privilege escalation attempts on known vulnerable binaries.
+
+
+
+* Noticed `/usr/local/bin/nmap` with SUID bit set
+* Launched interactive nmap shell:
+
+  /usr/local/bin/nmap --interactive
+
+* Spawned root shell by running:
+
+  !sh
+
+* Confirmed root access and captured `key-3-of-3.txt`
+
+
+Summary
+
+* Conducted thorough port scanning and directory brute forcing
+* Discovered WordPress login and cracked credentials via encoded hints
+* Exploited WordPress theme editor for reverse shell
+* Cracked user password and escalated privileges to user `robot`
+* Leveraged SUID nmap binary to escalate to root
+* Retrieved all keys successfully
+

@@ -71,7 +71,9 @@
   stty raw -echo
 
 * This improves terminal control and usability
+Run this Python wizardry to summon a proper interactive shell:
 
+python3 -c 'import pty; pty.spawn("/bin/bash")'
 
 
 ### 8. **Privilege Escalation - User `robot`**
